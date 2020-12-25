@@ -12,7 +12,7 @@ services:
             - '8000:8000'
         volumes:
             - './app:/opt/go-app:cached'
-        command: ["go", "run", "./atos-anp.go"]
+        command: ["go", "run", "./atos-anp.go", "-data_inicio", "01-04-2019", "-data_fim", "05-04-2019"]
 
     # MongoDB
     mongo:

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -14,13 +15,33 @@ import (
 	"github.com/gocolly/colly/v2"
 )
 
-var start_date string = "01-01-2020"
-var end_date string = "31-12-2020"
-
-var START_URL string = fmt.Sprintf("https://atosoficiais.com.br/anp?q=&status_consolidacao=0&date_start=%v&date_end=%v", start_date, end_date)
-var BASE_URL string = "https://atosoficiais.com.br"
+func validateDateParams(start_date string, end_date string) {
+	if start_date == "" {
+		log.Fatalf("É necessário setar a flag -data_inicio")
+	}
+	if end_date == "" {
+		log.Fatalf("É necessário setar a flag -end_date")
+	}
+	re_date := regexp.MustCompile(`\d{2}-\d{2}-\d{4}`)
+	start_date_validate := re_date.FindAll([]byte(start_date), -1)
+	if start_date_validate == nil {
+		log.Fatalf("O parâmetro -data_inicio deve ser do fomato dd-mm-YYYY")
+	}
+	end_date_validate := re_date.FindAll([]byte(end_date), -1)
+	if end_date_validate == nil {
+		log.Fatalf("O parâmetro -data_fim deve ser do fomato dd-mm-YYYY")
+	}
+}
 
 func main() {
+	var BASE_URL string = "https://atosoficiais.com.br"
+	var start_date string
+	var end_date string
+	flag.StringVar(&start_date, "data_inicio", "", "Data de Inicio no formato dd-mm-YYYY")
+	flag.StringVar(&end_date, "data_fim", "", "Data Final no formato dd-m-YYYY")
+	flag.Parse()
+	validateDateParams(start_date, end_date)
+	var START_URL string = fmt.Sprintf("https://atosoficiais.com.br/anp?q=&status_consolidacao=0&date_start=%v&date_end=%v", start_date, end_date)
 	client, err := mongo.GetMongoClient()
 	if err != nil {
 		log.Fatal(err)
