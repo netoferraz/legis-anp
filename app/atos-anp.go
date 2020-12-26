@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -14,13 +15,133 @@ import (
 	"github.com/gocolly/colly/v2"
 )
 
-var start_date string = "01-01-2020"
-var end_date string = "31-12-2020"
+type Error struct {
+	message string
+	isError bool
+}
 
-var START_URL string = fmt.Sprintf("https://atosoficiais.com.br/anp?q=&status_consolidacao=0&date_start=%v&date_end=%v", start_date, end_date)
-var BASE_URL string = "https://atosoficiais.com.br"
+func validateDateParams(start_date string, end_date string) {
+	if start_date == "" {
+		log.Fatalf("É necessário setar a flag -data_inicio")
+	}
+	if end_date == "" {
+		log.Fatalf("É necessário setar a flag -end_date")
+	}
+	re_date := regexp.MustCompile(`\d{2}-\d{2}-\d{4}`)
+	start_date_validate := re_date.FindAll([]byte(start_date), -1)
+	if start_date_validate == nil {
+		log.Fatalf("O parâmetro -data_inicio deve ser do fomato dd-mm-YYYY")
+	}
+	end_date_validate := re_date.FindAll([]byte(end_date), -1)
+	if end_date_validate == nil {
+		log.Fatalf("O parâmetro -data_fim deve ser do fomato dd-mm-YYYY")
+	}
+}
+
+func buildStartURL() string {
+	var start_date string
+	var end_date string
+	//type to code
+	var mappingAtos = make(map[string]string)
+	mappingAtos["Ata"] = "106"
+	mappingAtos["Autorização"] = "151"
+	mappingAtos["Despacho"] = "152"
+	mappingAtos["IN_Financeira_Administrativa"] = "202"
+	mappingAtos["IN_Gestão_Interna"] = "203"
+	mappingAtos["IN_Gestão_Técnica"] = "204"
+	mappingAtos["IN_Recursos_Humanos"] = "200"
+	mappingAtos["IN_Segurança_Operacional"] = "201"
+	mappingAtos["Instrução_Normativa"] = "9"
+	mappingAtos["Portaria_ANP"] = "157"
+	mappingAtos["Portaria_Conjunta"] = "153"
+	mappingAtos["Portaria_Técnica"] = "183"
+	mappingAtos["Resolução"] = "24"
+	mappingAtos["Resolução_Conjunta"] = "156"
+	mappingAtos["Resolução_de_Diretoria_RD"] = "163"
+	//date params
+	flag.StringVar(&start_date, "data_inicio", "", "Data de Inicio no formato dd-mm-YYYY")
+	flag.StringVar(&end_date, "data_fim", "", "Data Final no formato dd-m-YYYY")
+	//normative acts types
+	collAta := flag.Bool("ata", false, "Para coletar do tipo Ata.")
+	collAutorização := flag.Bool("autorização", false, "Para coletar do tipo Autorização.")
+	collDespacho := flag.Bool("despacho", false, "Para coletar do tipo Despacho.")
+	collInFinAdm := flag.Bool("in_fin_adm", false, "Para coletar do tipo IN Financeira Administrativa.")
+	collInGesInterna := flag.Bool("in_ges_interna", false, "Para coletar do tipo IN Gestão Interna")
+	collInGesTecnica := flag.Bool("in_ges_tec", false, "Para coletar do tipo IN Gestão Técnica")
+	collInRecHumanos := flag.Bool("in_rec_humanos", false, "Para coletar do tipo IN Recursos Humanos.")
+	collInSegOp := flag.Bool("in_seg_op", false, "Para coletar do tipo IN Segurança Operacional.")
+	collInstrNorm := flag.Bool("instr_norm", false, "Para coletar do tipo Instrução Normativa.")
+	collPortAnp := flag.Bool("port_anp", false, "Para coletar do tipo Portaria ANP.")
+	collPortConj := flag.Bool("port_conj", false, "Para coletar do tipo Portaria Conjunta.")
+	collPortTecnica := flag.Bool("port_tecnica", false, "Para coletar do tipo Portaria Técnica.")
+	collRes := flag.Bool("resolução", false, "Para coletar do tipo Resolução.")
+	collResConj := flag.Bool("res_conjunta", false, "Para coletar do tipo Resolução Conjunta.")
+	collResRD := flag.Bool("res_diretoria", false, "Para coletar do tipo Resolução de Diretoria RD.")
+	collAll := flag.Bool("all", false, "Para coletar todos os tipos.")
+	flag.Parse()
+	validateDateParams(start_date, end_date)
+	var TypeBool = make(map[string]bool)
+	TypeBool["all"] = *collAll
+	TypeBool["Ata"] = *collAta
+	TypeBool["Autorização"] = *collAutorização
+	TypeBool["Despacho"] = *collDespacho
+	TypeBool["IN_Financeira_Administrativa"] = *collInFinAdm
+	TypeBool["IN_Gestão_Interna"] = *collInGesInterna
+	TypeBool["IN_Gestão_Técnica"] = *collInGesTecnica
+	TypeBool["IN_Recursos_Humanos"] = *collInRecHumanos
+	TypeBool["IN_Segurança_Operacional"] = *collInSegOp
+	TypeBool["Instrução_Normativa"] = *collInstrNorm
+	TypeBool["Portaria_ANP"] = *collPortAnp
+	TypeBool["Portaria_Conjunta"] = *collPortConj
+	TypeBool["Portaria_Técnica"] = *collPortTecnica
+	TypeBool["Resolução"] = *collRes
+	TypeBool["Resolução_Conjunta"] = *collResConj
+	TypeBool["Resolução_de_Diretoria_RD"] = *collResRD
+	//build a query string
+	if TypeBool["all"] == true {
+		var START_URL = fmt.Sprintf("https://atosoficiais.com.br/anp?q=&status_consolidacao=0&date_start=%v&date_end=%v", start_date, end_date)
+		return START_URL
+	} else {
+		queryString := ""
+		for key, value := range TypeBool {
+			if key == "all" {
+				continue
+			} else {
+				if value == true {
+					queryString = queryString + "&types=" + mappingAtos[key]
+				}
+			}
+
+		}
+		if queryString != "" {
+			START_URL := fmt.Sprintf("https://atosoficiais.com.br/anp?q=%v&date_start=%v&date_end=%v", queryString, start_date, end_date)
+			return START_URL
+		} else {
+			// se nenhum parâmetro de tipo de normativo for setado, a query será realizada como -all
+			var START_URL = fmt.Sprintf("https://atosoficiais.com.br/anp?q=&status_consolidacao=0&date_start=%v&date_end=%v", start_date, end_date)
+			return START_URL
+		}
+
+	}
+}
+
+func buildPaginationURL(url string, pageNumber string, first_pagination bool) (string, Error) {
+	if first_pagination {
+		paginationURL := url + "&page=" + pageNumber
+		return paginationURL, Error{isError: false}
+	} else if strings.Contains(url, "page=") {
+		getIndex := strings.LastIndex(url, "page=")
+		if getIndex != -1 {
+			paginationURL := url[:getIndex] + "&page=" + pageNumber
+			return paginationURL, Error{isError: false}
+		}
+	}
+	return "", Error{message: "Não foi possível identificar a URL de paginação", isError: true}
+}
 
 func main() {
+	var BASE_URL string = "https://atosoficiais.com.br"
+	START_URL := buildStartURL()
 	client, err := mongo.GetMongoClient()
 	if err != nil {
 		log.Fatal(err)
@@ -28,11 +149,9 @@ func main() {
 	initialRequest := colly.NewCollector(
 		colly.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.80 Safari/537.36"),
 	)
-	initialRequest.AllowURLRevisit = false
-
 	initialRequest.Limit(&colly.LimitRule{
 		Parallelism: 2,
-		Delay:       5 * time.Second,
+		Delay:       2 * time.Second,
 	})
 	paginator := initialRequest.Clone()
 	parserLink := initialRequest.Clone()
@@ -61,8 +180,10 @@ func main() {
 					e.Request.Ctx.Put("pageNumber", pageNumber)
 					e.Request.Ctx.Put("numberOfResults", numberOfResults)
 					e.Request.Ctx.Put("numberOfPages", numberOfPagesString)
-					middle_url := fmt.Sprintf("/anp?q=&status_consolidacao=0&date_start=%v&date_end=%v&page=", start_date, end_date)
-					url := BASE_URL + middle_url + pageNumber
+					url, err := buildPaginationURL(e.Request.URL.String(), pageNumber, true)
+					if err.isError == true {
+						log.Fatal(err.message)
+					}
 					paginator.Request("GET", url, nil, e.Request.Ctx, nil)
 				}
 			} else {
@@ -70,12 +191,10 @@ func main() {
 			}
 		}
 	})
-
 	//parse links
 	initialRequest.OnHTML("a[href]", func(e *colly.HTMLElement) {
 		link := e.Attr("href")
 		if strings.HasPrefix(link, "/anp/") {
-			fmt.Println("Primeira página: ", link)
 			url := BASE_URL + link
 			parserLink.Visit(url)
 		}
@@ -102,8 +221,10 @@ func main() {
 		if pageNumber < numberOfPages {
 			pageNumber++
 			nextPage := fmt.Sprintf("%v", pageNumber)
-			middle_url := fmt.Sprintf("/anp?q=&status_consolidacao=0&date_start=%v&date_end=%v&page=", start_date, end_date)
-			url := BASE_URL + middle_url + nextPage
+			url, err := buildPaginationURL(c.Request.URL.String(), nextPage, false)
+			if err.isError == true {
+				log.Fatal(err.message)
+			}
 			c.Request.Ctx.Put("pageNumber", nextPage)
 			c.Request.Ctx.Put("numberOfPages", GetnumberOfPages)
 			paginator.Request("GET", url, nil, c.Request.Ctx, nil)
@@ -126,21 +247,29 @@ func main() {
 			apiRequest.Request("GET", fetchApi, nil, e.Request.Ctx, nil)
 		}
 	})
+
 	//Api
 	apiRequest.OnResponse(func(e *colly.Response) {
-		var dat mongo.AtosVinculados
-		data_id := e.Ctx.Get("id")
-		html := e.Ctx.Get("html")
-		text := e.Ctx.Get("text")
-		err := json.Unmarshal(e.Body, &dat)
-		if err != nil {
-			log.Fatal(err)
+		if e.StatusCode == 200 {
+			var dat mongo.AtosVinculados
+			data_id := e.Ctx.Get("id")
+			html := e.Ctx.Get("html")
+			text := e.Ctx.Get("text")
+			err := json.Unmarshal(e.Body, &dat)
+			if err != nil {
+				log.Fatal(err)
+			} else {
+				dat.Id = data_id
+				dat.Html = html
+				dat.Text = text
+				err = mongo.CreateDocument(client, dat)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
 		} else {
-			dat.Id = data_id
-			dat.Html = html
-			dat.Text = text
-			mongo.CreateDocument(client, dat)
-
+			messageError := fmt.Sprintf("Request para %v com status code: %v", e.Request.URL.String(), e.StatusCode)
+			fmt.Println(messageError)
 		}
 
 	})
